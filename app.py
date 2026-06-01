@@ -148,12 +148,6 @@ def generate_math_question():
 def get_ice_servers():
     """Get ICE servers configuration from st.secrets or fallback to default public servers."""
     try:
-        if "custom_turn" in st.session_state and st.session_state.custom_turn:
-            return [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {"urls": ["stun:stun1.l.google.com:19302"]},
-                st.session_state.custom_turn
-            ]
         if "webrtc" in st.secrets and "ice_servers" in st.secrets["webrtc"]:
             return st.secrets["webrtc"]["ice_servers"]
     except Exception:
@@ -400,26 +394,6 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"訓練失敗: {e}")
                     
-    st.write("---")
-    st.subheader("📹 視訊鏡頭疑難排解")
-    st.markdown("⚠️ **相機啟動前提**：網頁版視訊必須在 **HTTPS 安全連線** 下運作（本機測試限 `localhost` 或 `127.0.0.1`，請勿直接用局域網 IP 如 `192.168.x.x` 存取，否則瀏覽器會安全性阻擋相機）。")
-    
-    use_custom_turn = st.checkbox("⚙️ 設定自訂中繼伺服器 (TURN)", value=False)
-    if use_custom_turn:
-        st.info("💡 如果因為學校/公司網路防火牆阻擋導致鏡頭連線失敗，請在 [Metered.ca](https://www.metered.ca/) 註冊免費帳號，並將產生的伺服器資訊填寫於下方：")
-        custom_turn_url = st.text_input("TURN URL", "turn:openrelay.metered.ca:443?transport=tcp")
-        custom_turn_user = st.text_input("使用者名稱 (Username)", "openrelayproject")
-        custom_turn_pass = st.text_input("密碼 (Credential)", "openrelayproject", type="password")
-        
-        st.session_state.custom_turn = {
-            "urls": [custom_turn_url],
-            "username": custom_turn_user,
-            "credential": custom_turn_pass
-        }
-    else:
-        if 'custom_turn' in st.session_state:
-            del st.session_state.custom_turn
-
     st.write("---")
     st.write("👉 **手勢說明**：")
     st.info("""
