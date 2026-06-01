@@ -845,9 +845,9 @@ else:
             此專案展示了高級 Python 程式設計的多項關鍵知識點：
             1. **物件導向設計 (OOP)**：`MNISTClassifier` 用於神經網路運算、`HandTracker` 包裝 MediaPipe 手勢偵測、`DataManager` 包裝 Pandas 資料讀寫。
             2. **NumPy 矩陣運算**：
-               - 在 `src/model.py` 中，使用純 NumPy 實作 MLP Forward 運算（矩陣點積、ReLU、Softmax）。
-               - 在 `src/utils.py` 中，利用 OpenCV/NumPy 的 bounding box 計算，將使用者手繪的邊界框裁切、等比例縮放為 20x20，並置中放在 28x28 圖像內。
-            3. **Pandas 資料分析**：在 `data_manager.py` 讀寫 CSV 檔，使用 Pandas 計算平均時間、最大連勝數，並自動排序排行榜。
+               - 在 `src_game/model.py` 中，使用純 NumPy 實作 MLP Forward 運算（矩陣點積、ReLU、Softmax）。
+               - 在 `src_game/utils.py` 中，利用 OpenCV/NumPy 的 bounding box 計算，將使用者手繪的邊界框裁切、等比例縮放為 20x20，並置中放在 28x28 圖像內。
+            3. **Pandas 資料分析**：在 `src_game/data_manager.py` 讀寫 CSV 檔，使用 Pandas 計算平均時間、最大連勝數，並自動排序排行榜。
             4. **例外處理 (Exception Handling)**：
                - 自動捕捉模型權重缺失錯誤，引導使用者點擊邊欄訓練模型。
                - 自動捕捉攝影機加載失敗，允許無攝影機時降級成網頁手寫板模式。
@@ -884,7 +884,7 @@ ai_magic_canvas_game/
 │   └── leaderboard.csv     # 儲存玩家成績
 ├── assets/
 │   └── weights.npz         # 導出的權重矩陣
-└── src/
+└── src_game/
     ├── model.py            # NumPy AI 推論類別
     ├── hand_tracker.py     # MediaPipe 手勢偵測
     ├── data_manager.py     # Pandas 排行榜數據庫管理
