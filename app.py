@@ -260,6 +260,16 @@ class WebRTCHandProcessor:
             mask = self.canvas > 0
             processed_frame[mask] = [255, 255, 0] # BGR Cyan
             
+            # Real-time Prediction and PiP Overlay setup
+            mnist_ready = None
+            pred_digit = None
+            confidence = 0.0
+            if np.sum(self.canvas) > 0:
+                mnist_ready = preprocess_canvas_image(self.canvas)
+                if np.sum(mnist_ready) > 0:
+                    pred_digit, probs = self.classifier.predict(mnist_ready)
+                    confidence = probs[pred_digit] * 100
+            
             # Hand gesture submission logic
             if self.submit_cooldown > 0:
                 self.submit_cooldown -= 1
@@ -283,11 +293,7 @@ class WebRTCHandProcessor:
                     # Triggers submission when held for ~0.6 seconds (20 frames)
                     if self.submit_frames >= 20:
                         self.submit_frames = 0
-                        if np.sum(self.canvas) > 0:
-                            # Preprocess and Predict
-                            mnist_ready = preprocess_canvas_image(self.canvas)
-                            pred_digit, _ = self.classifier.predict(mnist_ready)
-                            
+                        if mnist_ready is not None:
                             if pred_digit == self.target_answer:
                                 self.score += 1
                                 self.streak += 1
@@ -323,13 +329,24 @@ class WebRTCHandProcessor:
             cv2.addWeighted(overlay, 0.6, processed_frame, 0.4, 0, processed_frame)
             
             # Banners text
+            if self.target_answer == -1: # Free draw mode
+                if pred_digit is not None:
+                    banner_text = f"AI PREDICT: {pred_digit} ({confidence:.1f}%)"
+                    text_color = (0, 255, 0) if confidence > 80 else (0, 255, 255)
+                else:
+                    banner_text = "FREE DRAW MODE (WRITE DIGIT)"
+                    text_color = (0, 255, 255)
+            else: # Quiz mode
+                banner_text = f"QUESTION: {self.current_question}"
+                text_color = (0, 255, 255)
+
             cv2.putText(
                 processed_frame, 
-                f"QUESTION: {self.current_question}", 
+                banner_text, 
                 (20, 35), 
                 cv2.FONT_HERSHEY_SIMPLEX, 
                 0.8, 
-                (0, 255, 255), 
+                text_color, 
                 2
             )
             
@@ -343,6 +360,18 @@ class WebRTCHandProcessor:
                 2
             )
             
+            # Show live prediction in Quiz mode next to gesture text
+            if self.target_answer != -1 and pred_digit is not None:
+                cv2.putText(
+                    processed_frame, 
+                    f"PRED: {pred_digit} ({confidence:.0f}%)", 
+                    (w - 440, h - 15), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 
+                    0.6, 
+                    (0, 255, 0) if confidence > 80 else (0, 255, 255), 
+                    2
+                )
+            
             cv2.putText(
                 processed_frame, 
                 f"GESTURE: {gesture.upper()}", 
@@ -352,6 +381,33 @@ class WebRTCHandProcessor:
                 (0, 255, 255), 
                 2
             )
+
+            # Draw AI's Eye (28x28 normalized canvas) picture-in-picture (PiP) in top-right
+            if mnist_ready is not None:
+                try:
+                    pip_size = 84
+                    pip_img = cv2.resize((mnist_ready * 255).astype(np.uint8), (pip_size, pip_size), interpolation=cv2.INTER_NEAREST)
+                    pip_bgr = cv2.cvtColor(pip_img, cv2.COLOR_GRAY2BGR)
+                    
+                    # Margin: 10px from top, 10px from right
+                    py1, py2 = 10, 10 + pip_size
+                    px1, px2 = w - 10 - pip_size, w - 10
+                    
+                    # Overlay PiP window
+                    processed_frame[py1:py2, px1:px2] = pip_bgr
+                    cv2.rectangle(processed_frame, (px1 - 1, py1 - 1), (px2 + 1, py2 + 1), (255, 255, 0), 1)
+                    
+                    cv2.putText(
+                        processed_frame,
+                        "AI VIEW",
+                        (px1 + 15, py2 + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4,
+                        (255, 255, 255),
+                        1
+                    )
+                except Exception:
+                    pass
     
             # Show Large Feedback Banner in Center of Screen if active
             if time.time() - self.feedback_time < 2.0:
