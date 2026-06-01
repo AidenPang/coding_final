@@ -9,10 +9,10 @@ import av
 import mediapipe as mp
 
 # Import local modules
-from src.model import MNISTClassifier
-from src.hand_tracker import HandTracker
-from src.data_manager import DataManager
-from src.utils import preprocess_canvas_image
+from src_game.model import MNISTClassifier
+from src_game.hand_tracker import HandTracker
+from src_game.data_manager import DataManager
+from src_game.utils import preprocess_canvas_image
 from train_model import train_and_save
 
 # Set page configuration
