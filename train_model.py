@@ -1,12 +1,13 @@
 import os
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
 
 def train_and_save():
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from torchvision import datasets, transforms
+    from torch.utils.data import DataLoader
+    
     print("=== MNIST Model Training Script ===")
     
     # 1. Ensure output directory exists
