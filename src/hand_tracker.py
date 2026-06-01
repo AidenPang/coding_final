@@ -28,7 +28,14 @@ class HandTracker:
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         
         # 2. Process image with MediaPipe Hands
-        results = self.hands.process(frame_rgb)
+        try:
+            results = self.hands.process(frame_rgb)
+        except Exception as e:
+            import sys
+            print(f"MediaPipe hands.process exception: {e}", file=sys.stderr)
+            class DummyResults:
+                multi_hand_landmarks = None
+            results = DummyResults()
         
         cursor_pos = None
         gesture = 'none'

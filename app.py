@@ -144,6 +144,43 @@ def generate_math_question():
     st.session_state.quiz_time_start = time.time()
     st.session_state.quiz_feedback = None
 
+def get_ice_servers():
+    """Get ICE servers configuration from st.secrets or fallback to default public servers."""
+    try:
+        if "webrtc" in st.secrets and "ice_servers" in st.secrets["webrtc"]:
+            return st.secrets["webrtc"]["ice_servers"]
+    except Exception:
+        pass
+    
+    # Fallback to public STUN/TURN servers
+    return [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["stun:stun2.l.google.com:19302"]},
+        {"urls": ["stun:stun3.l.google.com:19302"]},
+        {"urls": ["stun:stun4.l.google.com:19302"]},
+        {
+            "urls": ["turn:openrelay.metered.ca:80?transport=udp"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        },
+        {
+            "urls": ["turn:openrelay.metered.ca:80?transport=tcp"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        },
+        {
+            "urls": ["turn:openrelay.metered.ca:443?transport=udp"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        },
+        {
+            "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        }
+    ]
+
 # WebRTC Video Processor Class
 # WebRTC Video Processor Class
 class WebRTCHandProcessor:
@@ -197,139 +234,145 @@ class WebRTCHandProcessor:
         self.target_answer = ans
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")
-        h, w, c = img.shape
-        
-        # Initialize drawing canvas with black frame if empty
-        if self.canvas is None or self.canvas.shape != (h, w):
-            self.canvas = np.zeros((h, w), dtype=np.uint8)
+        try:
+            img = frame.to_ndarray(format="bgr24")
+            h, w, c = img.shape
             
-        # Process hand landmarks
-        processed_frame, cursor_pos, gesture = self.tracker.process_frame(img)
-        
-        # Draw on canvas if 'draw' gesture
-        if cursor_pos is not None:
-            cx, cy = cursor_pos
-            if gesture == 'draw':
-                # Draw thick white line on black canvas
-                cv2.circle(self.canvas, (cx, cy), 14, 255, -1)
-            elif gesture == 'clear':
-                # Clear canvas
-                self.canvas.fill(0)
+            # Initialize drawing canvas with black frame if empty
+            if self.canvas is None or self.canvas.shape != (h, w):
+                self.canvas = np.zeros((h, w), dtype=np.uint8)
                 
-        # Overlay the canvas onto the video frame in Cyan color
-        mask = self.canvas > 0
-        processed_frame[mask] = [255, 255, 0] # BGR Cyan
-        
-        # Hand gesture submission logic
-        if self.submit_cooldown > 0:
-            self.submit_cooldown -= 1
-        else:
-            if gesture == 'submit' and self.target_answer != -1:
-                self.submit_frames += 1
-                # Draw progress bar/text
-                progress = min(100, int((self.submit_frames / 20.0) * 100))
-                cv2.rectangle(processed_frame, (w // 2 - 100, h - 90), (w // 2 + 100, h - 70), (0, 0, 0), -1)
-                cv2.rectangle(processed_frame, (w // 2 - 100, h - 90), (w // 2 - 100 + int(progress * 2), h - 70), (0, 255, 255), -1)
-                cv2.putText(
-                    processed_frame, 
-                    f"SUBMITTING... {progress}%", 
-                    (w // 2 - 80, h - 75), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.5, 
-                    (255, 255, 255), 
-                    1
-                )
-                
-                # Triggers submission when held for ~0.6 seconds (20 frames)
-                if self.submit_frames >= 20:
-                    self.submit_frames = 0
-                    if np.sum(self.canvas) > 0:
-                        # Preprocess and Predict
-                        mnist_ready = preprocess_canvas_image(self.canvas)
-                        pred_digit, _ = self.classifier.predict(mnist_ready)
-                        
-                        if pred_digit == self.target_answer:
-                            self.score += 1
-                            self.streak += 1
-                            self.feedback_text = f"CORRECT! Answer is {pred_digit} \xf0\x9f\x8e\x89"
-                            self.feedback_color = (0, 255, 0) # Green
-                            self.generate_question_local()
-                        else:
-                            self.streak = 0
-                            self.feedback_text = f"WRONG! Recognized {pred_digit} \xe2\x9d\x8c"
-                            self.feedback_color = (0, 0, 255) # Red
-                            
-                        self.feedback_time = time.time()
-                        self.submit_cooldown = 60 # Cooldown of 2 seconds (60 frames)
-                        self.canvas.fill(0) # Clear canvas automatically after submit
-                        
-                        # Trigger rerun to sync score and question with main thread
-                        if self.session_id is not None:
-                            try:
-                                from streamlit.runtime import runtime
-                                runtime.get_instance().request_rerun(self.session_id)
-                            except Exception:
-                                pass
+            # Process hand landmarks
+            processed_frame, cursor_pos, gesture = self.tracker.process_frame(img)
+            
+            # Draw on canvas if 'draw' gesture
+            if cursor_pos is not None:
+                cx, cy = cursor_pos
+                if gesture == 'draw':
+                    # Draw thick white line on black canvas
+                    cv2.circle(self.canvas, (cx, cy), 14, 255, -1)
+                elif gesture == 'clear':
+                    # Clear canvas
+                    self.canvas.fill(0)
+                    
+            # Overlay the canvas onto the video frame in Cyan color
+            mask = self.canvas > 0
+            processed_frame[mask] = [255, 255, 0] # BGR Cyan
+            
+            # Hand gesture submission logic
+            if self.submit_cooldown > 0:
+                self.submit_cooldown -= 1
             else:
-                self.submit_frames = 0
-
-        # Draw Banners (HUD)
-        overlay = processed_frame.copy()
-        # Top banner for Question
-        cv2.rectangle(overlay, (0, 0), (w, 55), (0, 0, 0), -1)
-        # Bottom banner for Score/Streak
-        cv2.rectangle(overlay, (0, h - 45), (w, h), (0, 0, 0), -1)
-        # Blend banners
-        cv2.addWeighted(overlay, 0.6, processed_frame, 0.4, 0, processed_frame)
-        
-        # Banners text
-        cv2.putText(
-            processed_frame, 
-            f"QUESTION: {self.current_question}", 
-            (20, 35), 
-            cv2.FONT_HERSHEY_SIMPLEX, 
-            0.8, 
-            (0, 255, 255), 
-            2
-        )
-        
-        cv2.putText(
-            processed_frame, 
-            f"SCORE: {self.score}  |  STREAK: {self.streak}", 
-            (20, h - 15), 
-            cv2.FONT_HERSHEY_SIMPLEX, 
-            0.6, 
-            (255, 255, 255), 
-            2
-        )
-        
-        cv2.putText(
-            processed_frame, 
-            f"GESTURE: {gesture.upper()}", 
-            (w - 220, h - 15), 
-            cv2.FONT_HERSHEY_SIMPLEX, 
-            0.6, 
-            (0, 255, 255), 
-            2
-        )
-
-        # Show Large Feedback Banner in Center of Screen if active
-        if time.time() - self.feedback_time < 2.0:
-            overlay_fb = processed_frame.copy()
-            cv2.rectangle(overlay_fb, (w // 2 - 220, h // 2 - 40), (w // 2 + 220, h // 2 + 40), self.feedback_color, -1)
-            cv2.addWeighted(overlay_fb, 0.7, processed_frame, 0.3, 0, processed_frame)
+                if gesture == 'submit' and self.target_answer != -1:
+                    self.submit_frames += 1
+                    # Draw progress bar/text
+                    progress = min(100, int((self.submit_frames / 20.0) * 100))
+                    cv2.rectangle(processed_frame, (w // 2 - 100, h - 90), (w // 2 + 100, h - 70), (0, 0, 0), -1)
+                    cv2.rectangle(processed_frame, (w // 2 - 100, h - 90), (w // 2 - 100 + int(progress * 2), h - 70), (0, 255, 255), -1)
+                    cv2.putText(
+                        processed_frame, 
+                        f"SUBMITTING... {progress}%", 
+                        (w // 2 - 80, h - 75), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 
+                        0.5, 
+                        (255, 255, 255), 
+                        1
+                    )
+                    
+                    # Triggers submission when held for ~0.6 seconds (20 frames)
+                    if self.submit_frames >= 20:
+                        self.submit_frames = 0
+                        if np.sum(self.canvas) > 0:
+                            # Preprocess and Predict
+                            mnist_ready = preprocess_canvas_image(self.canvas)
+                            pred_digit, _ = self.classifier.predict(mnist_ready)
+                            
+                            if pred_digit == self.target_answer:
+                                self.score += 1
+                                self.streak += 1
+                                self.feedback_text = f"CORRECT! Answer is {pred_digit} \xf0\x9f\x8e\x89"
+                                self.feedback_color = (0, 255, 0) # Green
+                                self.generate_question_local()
+                            else:
+                                self.streak = 0
+                                self.feedback_text = f"WRONG! Recognized {pred_digit} \xe2\x9d\x8c"
+                                self.feedback_color = (0, 0, 255) # Red
+                                
+                            self.feedback_time = time.time()
+                            self.submit_cooldown = 60 # Cooldown of 2 seconds (60 frames)
+                            self.canvas.fill(0) # Clear canvas automatically after submit
+                            
+                            # Trigger rerun to sync score and question with main thread
+                            if self.session_id is not None:
+                                try:
+                                    from streamlit.runtime import runtime
+                                    runtime.get_instance().request_rerun(self.session_id)
+                                except Exception:
+                                    pass
+                else:
+                    self.submit_frames = 0
+    
+            # Draw Banners (HUD)
+            overlay = processed_frame.copy()
+            # Top banner for Question
+            cv2.rectangle(overlay, (0, 0), (w, 55), (0, 0, 0), -1)
+            # Bottom banner for Score/Streak
+            cv2.rectangle(overlay, (0, h - 45), (w, h), (0, 0, 0), -1)
+            # Blend banners
+            cv2.addWeighted(overlay, 0.6, processed_frame, 0.4, 0, processed_frame)
+            
+            # Banners text
             cv2.putText(
                 processed_frame, 
-                self.feedback_text, 
-                (w // 2 - 200, h // 2 + 10), 
+                f"QUESTION: {self.current_question}", 
+                (20, 35), 
                 cv2.FONT_HERSHEY_SIMPLEX, 
                 0.8, 
+                (0, 255, 255), 
+                2
+            )
+            
+            cv2.putText(
+                processed_frame, 
+                f"SCORE: {self.score}  |  STREAK: {self.streak}", 
+                (20, h - 15), 
+                cv2.FONT_HERSHEY_SIMPLEX, 
+                0.6, 
                 (255, 255, 255), 
                 2
             )
-
-        return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
+            
+            cv2.putText(
+                processed_frame, 
+                f"GESTURE: {gesture.upper()}", 
+                (w - 220, h - 15), 
+                cv2.FONT_HERSHEY_SIMPLEX, 
+                0.6, 
+                (0, 255, 255), 
+                2
+            )
+    
+            # Show Large Feedback Banner in Center of Screen if active
+            if time.time() - self.feedback_time < 2.0:
+                overlay_fb = processed_frame.copy()
+                cv2.rectangle(overlay_fb, (w // 2 - 220, h // 2 - 40), (w // 2 + 220, h // 2 + 40), self.feedback_color, -1)
+                cv2.addWeighted(overlay_fb, 0.7, processed_frame, 0.3, 0, processed_frame)
+                cv2.putText(
+                    processed_frame, 
+                    self.feedback_text, 
+                    (w // 2 - 200, h // 2 + 10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 
+                    0.8, 
+                    (255, 255, 255), 
+                    2
+                )
+    
+            return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
+        except Exception as e:
+            import sys, traceback
+            print("WebRTC hand processor recv loop error:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            return frame
 
 # ----------------- SIDEBAR STATUS -----------------
 with st.sidebar:
@@ -464,29 +507,7 @@ else:
                         key="quiz-camera",
                         video_processor_factory=lambda q=st.session_state.quiz_question, a=st.session_state.quiz_answer, s=st.session_state.quiz_score, k=st.session_state.quiz_streak, sid=session_id: WebRTCHandProcessor(q, a, s, k, sid),
                         rtc_configuration={
-                            "iceServers": [
-                                {"urls": ["stun:stun.l.google.com:19302"]},
-                                {
-                                    "urls": ["turn:openrelay.metered.ca:80?transport=udp"],
-                                    "username": "openrelayproject",
-                                    "credential": "openrelayproject"
-                                },
-                                {
-                                    "urls": ["turn:openrelay.metered.ca:80?transport=tcp"],
-                                    "username": "openrelayproject",
-                                    "credential": "openrelayproject"
-                                },
-                                {
-                                    "urls": ["turn:openrelay.metered.ca:443?transport=udp"],
-                                    "username": "openrelayproject",
-                                    "credential": "openrelayproject"
-                                },
-                                {
-                                    "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
-                                    "username": "openrelayproject",
-                                    "credential": "openrelayproject"
-                                }
-                            ]
+                            "iceServers": get_ice_servers()
                         },
                         media_stream_constraints={"video": True, "audio": False},
                     )
@@ -638,29 +659,7 @@ else:
                     key="paint-camera",
                     video_processor_factory=WebRTCHandProcessor,
                     rtc_configuration={
-                        "iceServers": [
-                            {"urls": ["stun:stun.l.google.com:19302"]},
-                            {
-                                "urls": ["turn:openrelay.metered.ca:80?transport=udp"],
-                                "username": "openrelayproject",
-                                "credential": "openrelayproject"
-                            },
-                            {
-                                "urls": ["turn:openrelay.metered.ca:80?transport=tcp"],
-                                "username": "openrelayproject",
-                                "credential": "openrelayproject"
-                                },
-                            {
-                                "urls": ["turn:openrelay.metered.ca:443?transport=udp"],
-                                "username": "openrelayproject",
-                                "credential": "openrelayproject"
-                            },
-                            {
-                                "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
-                                "username": "openrelayproject",
-                                "credential": "openrelayproject"
-                            }
-                        ]
+                        "iceServers": get_ice_servers()
                     },
                     media_stream_constraints={"video": True, "audio": False},
                 )
