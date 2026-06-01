@@ -1,4 +1,5 @@
 import os
+os.environ["MEDIAPIPE_DISABLE_GPU"] = "1"
 import time
 import numpy as np
 import pandas as pd
