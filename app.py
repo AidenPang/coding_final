@@ -463,7 +463,16 @@ else:
                     ctx = webrtc_streamer(
                         key="quiz-camera",
                         video_processor_factory=lambda q=st.session_state.quiz_question, a=st.session_state.quiz_answer, s=st.session_state.quiz_score, k=st.session_state.quiz_streak, sid=session_id: WebRTCHandProcessor(q, a, s, k, sid),
-                        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+                        rtc_configuration={
+                            "iceServers": [
+                                {"urls": ["stun:stun.l.google.com:19302"]},
+                                {
+                                    "urls": ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443"],
+                                    "username": "openrelayproject",
+                                    "credential": "openrelayproject"
+                                }
+                            ]
+                        },
                         media_stream_constraints={"video": True, "audio": False},
                     )
                     st.session_state.webrtc_ctx = ctx
@@ -613,7 +622,16 @@ else:
                 ctx_paint = webrtc_streamer(
                     key="paint-camera",
                     video_processor_factory=WebRTCHandProcessor,
-                    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+                    rtc_configuration={
+                        "iceServers": [
+                            {"urls": ["stun:stun.l.google.com:19302"]},
+                            {
+                                "urls": ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443"],
+                                "username": "openrelayproject",
+                                "credential": "openrelayproject"
+                            }
+                        ]
+                    },
                     media_stream_constraints={"video": True, "audio": False},
                 )
                 
