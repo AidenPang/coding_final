@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 import cv2
 import av
+import mediapipe as mp
 
 # Import local modules
 from src.model import MNISTClassifier
